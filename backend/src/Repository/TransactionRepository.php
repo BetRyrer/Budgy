@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Transaction;
 use App\Entity\TransactionType;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -20,11 +21,13 @@ class TransactionRepository extends ServiceEntityRepository
     /**
      * Somme des montants pour un type donné, optionnellement bornée par des dates (incluses).
      */
-    public function sumByType(TransactionType $type, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null): float
+    public function sumByType(User $owner, TransactionType $type, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null): float
     {
         $qb = $this->createQueryBuilder('t')
             ->select('COALESCE(SUM(t.amount), 0) as total')
+            ->andWhere('t.owner = :owner')
             ->andWhere('t.type = :type')
+            ->setParameter('owner', $owner)
             ->setParameter('type', $type->value);
 
         if ($from !== null) {
@@ -42,12 +45,14 @@ class TransactionRepository extends ServiceEntityRepository
      *
      * @return array<int, array{id: int, name: string, color: string, total: float}>
      */
-    public function expensesByCategory(?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null): array
+    public function expensesByCategory(User $owner, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null): array
     {
         $qb = $this->createQueryBuilder('t')
             ->select('c.id as id, c.name as name, c.color as color, COALESCE(SUM(t.amount), 0) as total')
             ->join('t.category', 'c')
+            ->andWhere('t.owner = :owner')
             ->andWhere('t.type = :type')
+            ->setParameter('owner', $owner)
             ->setParameter('type', TransactionType::Expense->value)
             ->groupBy('c.id, c.name, c.color')
             ->orderBy('total', 'DESC');
@@ -74,7 +79,7 @@ class TransactionRepository extends ServiceEntityRepository
      *
      * @return array<int, array{month: string, income: float, expense: float}>
      */
-    public function monthlyEvolution(int $months = 6): array
+    public function monthlyEvolution(User $owner, int $months = 6): array
     {
         $now = new \DateTimeImmutable('first day of this month');
         $start = $now->modify(sprintf('-%d months', $months - 1));
@@ -84,7 +89,9 @@ class TransactionRepository extends ServiceEntityRepository
         // par le parseur DQL, alors qu'agréger ~quelques centaines de lignes en PHP est trivial.
         $rows = $this->createQueryBuilder('t')
             ->select('t.date as date, t.type as type, t.amount as amount')
+            ->andWhere('t.owner = :owner')
             ->andWhere('t.date >= :start')
+            ->setParameter('owner', $owner)
             ->setParameter('start', $start)
             ->getQuery()
             ->getArrayResult();
@@ -117,10 +124,12 @@ class TransactionRepository extends ServiceEntityRepository
     /**
      * Dépense la plus récente (par date, puis par id en cas d'égalité), ou null s'il n'y en a aucune.
      */
-    public function lastExpense(): ?Transaction
+    public function lastExpense(User $owner): ?Transaction
     {
         return $this->createQueryBuilder('t')
+            ->andWhere('t.owner = :owner')
             ->andWhere('t.type = :type')
+            ->setParameter('owner', $owner)
             ->setParameter('type', TransactionType::Expense->value)
             ->orderBy('t.date', 'DESC')
             ->addOrderBy('t.id', 'DESC')
@@ -134,13 +143,26 @@ class TransactionRepository extends ServiceEntityRepository
      *
      * @return array<int, Transaction>
      */
-    public function recent(int $limit = 5): array
+    public function recent(User $owner, int $limit = 5): array
     {
         return $this->createQueryBuilder('t')
+            ->andWhere('t.owner = :owner')
+            ->setParameter('owner', $owner)
             ->orderBy('t.date', 'DESC')
             ->addOrderBy('t.id', 'DESC')
             ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
+    }
+
+    public function findOneForOwner(int $id, User $owner): ?Transaction
+    {
+        return $this->createQueryBuilder('t')
+            ->andWhere('t.id = :id')
+            ->andWhere('t.owner = :owner')
+            ->setParameter('id', $id)
+            ->setParameter('owner', $owner)
+            ->getQuery()
+            ->getOneOrNullResult();
     }
 }

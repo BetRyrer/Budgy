@@ -32,9 +32,10 @@ Dashboard avec statistiques, suivi des transactions et des catégories, graphiqu
 
 ## ✨ Fonctionnalités
 
+- 🔐 **Comptes utilisateurs** : inscription/connexion par email + mot de passe (JWT), chaque utilisateur ne voit que ses propres transactions et catégories
 - 📊 **Dashboard** : solde, revenus/dépenses du mois, dernière dépense, répartition par catégorie (camembert), évolution sur 6 mois, transactions récentes
 - 💰 **Transactions** : création, édition, suppression, recherche par libellé, tri par date/libellé/montant, filtres par mois et catégorie
-- 🏷️ **Catégories** : gestion complète avec couleur personnalisée
+- 🏷️ **Catégories** : gestion complète avec couleur personnalisée (6 catégories de départ créées automatiquement à l'inscription)
 - 🌗 **Dark mode** : bascule clair/sombre, respecte la préférence système, persistée entre les sessions
 - 🐳 **100% dockerisé** : un `docker compose up` et tout tourne — aucune installation locale de PHP, Node ou PostgreSQL requise
 
@@ -43,6 +44,7 @@ Dashboard avec statistiques, suivi des transactions et des catégories, graphiqu
 | Composant | Techno |
 |---|---|
 | Backend | Symfony 7 (PHP 8.3), API REST en JSON |
+| Authentification | Symfony Security + JWT (LexikJWTAuthenticationBundle) |
 | ORM | Doctrine ORM + Migrations |
 | Frontend | React 18 + TypeScript, Vite, Tailwind CSS |
 | Graphiques | Chart.js (react-chartjs-2) |
@@ -71,7 +73,7 @@ docker compose exec backend php bin/console doctrine:migrations:migrate --no-int
 docker compose exec backend php bin/console doctrine:fixtures:load --no-interaction
 ```
 
-C'est prêt 🎉
+C'est prêt 🎉 Ouvrez http://localhost:5173, connectez-vous avec le compte de démo, ou créez le vôtre.
 
 | Service | URL |
 |---|---|
@@ -79,6 +81,16 @@ C'est prêt 🎉
 | API backend | http://localhost:8080/api |
 
 > Les ports se changent via `FRONTEND_PORT` / `NGINX_PORT` / `POSTGRES_PORT` dans `.env`.
+
+### Compte de démonstration
+
+Les fixtures créent un compte pré-rempli avec ~30 transactions :
+
+| Email | Mot de passe |
+|---|---|
+| `demo@budgy.app` | `password123` |
+
+Vous pouvez aussi créer votre propre compte depuis l'écran de connexion (« Inscrivez-vous ») — 7 catégories de départ sont créées automatiquement pour pouvoir ajouter des transactions immédiatement.
 
 ## 📁 Structure du projet
 
@@ -88,9 +100,10 @@ Budgy/
 ├── .env                    # variables d'environnement (généré depuis .env.example)
 ├── backend/                 # API Symfony
 │   └── src/
-│       ├── Entity/          # Category, Transaction
-│       ├── Controller/      # CategoryController, TransactionController, StatsController
+│       ├── Entity/          # User, Category, Transaction
+│       ├── Controller/      # AuthController, CategoryController, TransactionController, StatsController
 │       ├── Repository/      # requêtes Doctrine (dont les agrégations de /api/stats)
+│       ├── EventListener/   # enrichit la réponse de connexion avec les infos utilisateur
 │       └── DataFixtures/    # jeu de données de démo
 └── frontend/                # App React
     └── src/
@@ -126,7 +139,16 @@ docker compose exec backend composer require <paquet>
 
 ## 📡 API
 
-Toutes les routes sont préfixées par `/api` et échangent du JSON.
+Toutes les routes sont préfixées par `/api` et échangent du JSON. Sauf `/api/register` et `/api/login`,
+toutes nécessitent un token JWT dans l'en-tête `Authorization: Bearer <token>`.
+
+### Authentification
+
+| Méthode | Route | Description |
+|---|---|---|
+| POST | `/api/register` | Inscription (`{ email, password, firstName, lastName }`), renvoie `{ token, user }` et connecte directement |
+| POST | `/api/login` | Connexion (`{ email, password }`), renvoie `{ token, user }` |
+| GET | `/api/me` | Informations de l'utilisateur connecté |
 
 ### Catégories
 
@@ -158,6 +180,7 @@ Toutes les routes sont préfixées par `/api` et échangent du JSON.
 
 ## ⚙️ Notes de configuration
 
+- **Authentification** : Symfony Security + [LexikJWTAuthenticationBundle](https://github.com/lexik/LexikJWTAuthenticationBundle). Les clés RSA (`backend/config/jwt/`) sont gitignorées et **générées automatiquement au premier démarrage** du conteneur backend (voir `backend/docker/entrypoint.sh`) — aucune étape manuelle requise. Chaque `Transaction`/`Category` appartient à un `owner` ; toutes les requêtes sont scopées à l'utilisateur authentifié (aucune fuite de données entre comptes).
 - **CORS** : géré par `NelmioCorsBundle` (`backend/config/packages/nelmio_cors.yaml`), autorisé via la variable d'environnement `CORS_ALLOW_ORIGIN` (regex) injectée par `docker-compose.yml`, pour que le frontend (autre origine/port) puisse appeler l'API depuis le navigateur.
 - **Hot-reload** : le code source de `backend/` et `frontend/` est monté en bind mount dans les conteneurs ; `vendor/`, `var/` et `node_modules/` restent dans des volumes dédiés pour ne pas être écrasés par le mount.
 - **Persistance BDD** : les données PostgreSQL sont stockées dans le volume nommé `db_data`, qui survit aux `docker compose down` (mais pas à `docker compose down -v`).
@@ -168,7 +191,7 @@ Toutes les routes sont préfixées par `/api` et échangent du JSON.
 - Budgets par catégorie avec seuils et alertes
 - Export CSV des transactions
 - Transactions récurrentes (loyer, salaire, abonnements)
-- Authentification multi-utilisateur
+- Rafraîchissement de token (refresh token) pour éviter une reconnexion après expiration du JWT
 - Tests automatisés (PHPUnit, Vitest)
 
 ---

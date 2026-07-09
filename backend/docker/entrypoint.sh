@@ -9,4 +9,11 @@ if [ ! -f vendor/autoload.php ]; then
     composer install --no-interaction --optimize-autoloader
 fi
 
+# Les clés JWT (config/jwt/) sont gitignorées : on les génère au premier démarrage
+# si elles sont absentes, pour que `docker compose up` fonctionne sans étape manuelle.
+if [ ! -f config/jwt/private.pem ]; then
+    echo "[entrypoint] Clés JWT manquantes, génération..."
+    php bin/console lexik:jwt:generate-keypair --no-interaction
+fi
+
 exec "$@"

@@ -5,20 +5,44 @@ namespace App\DataFixtures;
 use App\Entity\Category;
 use App\Entity\Transaction;
 use App\Entity\TransactionType;
+use App\Entity\User;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 class AppFixtures extends Fixture
 {
+    public const DEMO_EMAIL = 'demo@budgy.app';
+    public const DEMO_PASSWORD = 'password123';
+
     /** @var array<string, Category> */
     private array $categories = [];
 
+    private User $demoUser;
+
+    public function __construct(private readonly UserPasswordHasherInterface $passwordHasher)
+    {
+    }
+
     public function load(ObjectManager $manager): void
     {
+        $this->loadDemoUser($manager);
         $this->loadCategories($manager);
         $this->loadTransactions($manager);
 
         $manager->flush();
+    }
+
+    private function loadDemoUser(ObjectManager $manager): void
+    {
+        $user = new User();
+        $user->setEmail(self::DEMO_EMAIL);
+        $user->setFirstName('Jean');
+        $user->setLastName('Dupont');
+        $user->setPassword($this->passwordHasher->hashPassword($user, self::DEMO_PASSWORD));
+
+        $manager->persist($user);
+        $this->demoUser = $user;
     }
 
     private function loadCategories(ObjectManager $manager): void
@@ -38,6 +62,7 @@ class AppFixtures extends Fixture
             $category = new Category();
             $category->setName($name);
             $category->setColor($color);
+            $category->setOwner($this->demoUser);
             $manager->persist($category);
             $this->categories[$name] = $category;
         }
@@ -94,6 +119,7 @@ class AppFixtures extends Fixture
             $transaction->setType($type);
             $transaction->setDate($date);
             $transaction->setCategory($this->categories[$categoryName]);
+            $transaction->setOwner($this->demoUser);
 
             $manager->persist($transaction);
         }

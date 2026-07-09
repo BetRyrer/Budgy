@@ -3,11 +3,13 @@
 namespace App\Controller;
 
 use App\Entity\Category;
+use App\Entity\User;
 use App\Repository\CategoryRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('/api/categories')]
@@ -21,17 +23,17 @@ class CategoryController extends AbstractApiController
     }
 
     #[Route('', methods: ['GET'])]
-    public function list(): JsonResponse
+    public function list(#[CurrentUser] User $user): JsonResponse
     {
-        $categories = $this->categories->findBy([], ['name' => 'ASC']);
+        $categories = $this->categories->findAllForOwner($user);
 
         return $this->json(array_map(fn (Category $c) => $c->toArray(), $categories));
     }
 
     #[Route('/{id}', methods: ['GET'])]
-    public function show(int $id): JsonResponse
+    public function show(int $id, #[CurrentUser] User $user): JsonResponse
     {
-        $category = $this->categories->find($id);
+        $category = $this->categories->findOneForOwner($id, $user);
         if (!$category) {
             return $this->notFound('Catégorie introuvable.');
         }
@@ -40,7 +42,7 @@ class CategoryController extends AbstractApiController
     }
 
     #[Route('', methods: ['POST'])]
-    public function create(Request $request): JsonResponse
+    public function create(Request $request, #[CurrentUser] User $user): JsonResponse
     {
         $data = $this->decode($request);
         if ($data === null) {
@@ -50,6 +52,7 @@ class CategoryController extends AbstractApiController
         $category = new Category();
         $category->setName((string) ($data['name'] ?? ''));
         $category->setColor((string) ($data['color'] ?? '#6366f1'));
+        $category->setOwner($user);
 
         if ($errorResponse = $this->validate($category, $this->validator)) {
             return $errorResponse;
@@ -62,9 +65,9 @@ class CategoryController extends AbstractApiController
     }
 
     #[Route('/{id}', methods: ['PUT', 'PATCH'])]
-    public function update(int $id, Request $request): JsonResponse
+    public function update(int $id, Request $request, #[CurrentUser] User $user): JsonResponse
     {
-        $category = $this->categories->find($id);
+        $category = $this->categories->findOneForOwner($id, $user);
         if (!$category) {
             return $this->notFound('Catégorie introuvable.');
         }
@@ -91,9 +94,9 @@ class CategoryController extends AbstractApiController
     }
 
     #[Route('/{id}', methods: ['DELETE'])]
-    public function delete(int $id): JsonResponse
+    public function delete(int $id, #[CurrentUser] User $user): JsonResponse
     {
-        $category = $this->categories->find($id);
+        $category = $this->categories->findOneForOwner($id, $user);
         if (!$category) {
             return $this->notFound('Catégorie introuvable.');
         }

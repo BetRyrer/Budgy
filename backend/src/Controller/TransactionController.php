@@ -4,12 +4,14 @@ namespace App\Controller;
 
 use App\Entity\Transaction;
 use App\Entity\TransactionType;
+use App\Entity\User;
 use App\Repository\CategoryRepository;
 use App\Repository\TransactionRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[Route('/api/transactions')]
@@ -31,9 +33,11 @@ class TransactionController extends AbstractApiController
     ];
 
     #[Route('', methods: ['GET'])]
-    public function list(Request $request): JsonResponse
+    public function list(Request $request, #[CurrentUser] User $user): JsonResponse
     {
-        $qb = $this->transactions->createQueryBuilder('t');
+        $qb = $this->transactions->createQueryBuilder('t')
+            ->andWhere('t.owner = :owner')
+            ->setParameter('owner', $user);
 
         // Filtre par mois, ex: ?month=2026-07
         $month = $request->query->get('month');
@@ -76,9 +80,9 @@ class TransactionController extends AbstractApiController
     }
 
     #[Route('/{id}', methods: ['GET'])]
-    public function show(int $id): JsonResponse
+    public function show(int $id, #[CurrentUser] User $user): JsonResponse
     {
-        $transaction = $this->transactions->find($id);
+        $transaction = $this->transactions->findOneForOwner($id, $user);
         if (!$transaction) {
             return $this->notFound('Transaction introuvable.');
         }
@@ -87,7 +91,7 @@ class TransactionController extends AbstractApiController
     }
 
     #[Route('', methods: ['POST'])]
-    public function create(Request $request): JsonResponse
+    public function create(Request $request, #[CurrentUser] User $user): JsonResponse
     {
         $data = $this->decode($request);
         if ($data === null) {
@@ -95,7 +99,8 @@ class TransactionController extends AbstractApiController
         }
 
         $transaction = new Transaction();
-        $errorResponse = $this->hydrate($transaction, $data);
+        $transaction->setOwner($user);
+        $errorResponse = $this->hydrate($transaction, $data, $user);
         if ($errorResponse) {
             return $errorResponse;
         }
@@ -111,9 +116,9 @@ class TransactionController extends AbstractApiController
     }
 
     #[Route('/{id}', methods: ['PUT', 'PATCH'])]
-    public function update(int $id, Request $request): JsonResponse
+    public function update(int $id, Request $request, #[CurrentUser] User $user): JsonResponse
     {
-        $transaction = $this->transactions->find($id);
+        $transaction = $this->transactions->findOneForOwner($id, $user);
         if (!$transaction) {
             return $this->notFound('Transaction introuvable.');
         }
@@ -123,7 +128,7 @@ class TransactionController extends AbstractApiController
             return $this->badRequest('Corps de requête JSON invalide.');
         }
 
-        $errorResponse = $this->hydrate($transaction, $data);
+        $errorResponse = $this->hydrate($transaction, $data, $user);
         if ($errorResponse) {
             return $errorResponse;
         }
@@ -138,9 +143,9 @@ class TransactionController extends AbstractApiController
     }
 
     #[Route('/{id}', methods: ['DELETE'])]
-    public function delete(int $id): JsonResponse
+    public function delete(int $id, #[CurrentUser] User $user): JsonResponse
     {
-        $transaction = $this->transactions->find($id);
+        $transaction = $this->transactions->findOneForOwner($id, $user);
         if (!$transaction) {
             return $this->notFound('Transaction introuvable.');
         }
@@ -155,7 +160,7 @@ class TransactionController extends AbstractApiController
      * Applique les champs présents dans $data à la transaction. Renvoie une JsonResponse
      * d'erreur si un champ est malformé (type, date, catégorie inexistante), sinon null.
      */
-    private function hydrate(Transaction $transaction, array $data): ?JsonResponse
+    private function hydrate(Transaction $transaction, array $data, User $user): ?JsonResponse
     {
         if (array_key_exists('label', $data)) {
             $transaction->setLabel((string) $data['label']);
@@ -185,7 +190,7 @@ class TransactionController extends AbstractApiController
         }
 
         if (array_key_exists('categoryId', $data)) {
-            $category = $this->categories->find($data['categoryId']);
+            $category = $this->categories->findOneForOwner((int) $data['categoryId'], $user);
             if ($category === null) {
                 return $this->badRequest('Catégorie introuvable pour "categoryId".');
             }

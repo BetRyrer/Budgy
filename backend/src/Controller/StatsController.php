@@ -4,9 +4,11 @@ namespace App\Controller;
 
 use App\Entity\Transaction;
 use App\Entity\TransactionType;
+use App\Entity\User;
 use App\Repository\TransactionRepository;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\CurrentUser;
 
 #[Route('/api/stats')]
 class StatsController extends AbstractApiController
@@ -16,16 +18,16 @@ class StatsController extends AbstractApiController
     }
 
     #[Route('', methods: ['GET'])]
-    public function index(): JsonResponse
+    public function index(#[CurrentUser] User $user): JsonResponse
     {
-        $totalIncome = $this->transactions->sumByType(TransactionType::Income);
-        $totalExpense = $this->transactions->sumByType(TransactionType::Expense);
+        $totalIncome = $this->transactions->sumByType($user, TransactionType::Income);
+        $totalExpense = $this->transactions->sumByType($user, TransactionType::Expense);
 
         $monthStart = new \DateTimeImmutable('first day of this month');
         $monthEnd = new \DateTimeImmutable('last day of this month');
 
-        $monthIncome = $this->transactions->sumByType(TransactionType::Income, $monthStart, $monthEnd);
-        $monthExpense = $this->transactions->sumByType(TransactionType::Expense, $monthStart, $monthEnd);
+        $monthIncome = $this->transactions->sumByType($user, TransactionType::Income, $monthStart, $monthEnd);
+        $monthExpense = $this->transactions->sumByType($user, TransactionType::Expense, $monthStart, $monthEnd);
 
         return $this->json([
             // Totaux sur l'ensemble des transactions
@@ -42,18 +44,18 @@ class StatsController extends AbstractApiController
             ],
 
             // Répartition des dépenses par catégorie (toutes périodes confondues)
-            'expensesByCategory' => $this->transactions->expensesByCategory(),
+            'expensesByCategory' => $this->transactions->expensesByCategory($user),
 
             // Évolution des 6 derniers mois, pour le graphique d'évolution
-            'monthlyEvolution' => $this->transactions->monthlyEvolution(6),
+            'monthlyEvolution' => $this->transactions->monthlyEvolution($user, 6),
 
             // Dépense la plus récente
-            'lastExpense' => $this->transactions->lastExpense()?->toArray(),
+            'lastExpense' => $this->transactions->lastExpense($user)?->toArray(),
 
             // Les 5 dernières transactions (revenus et dépenses confondus)
             'recentTransactions' => array_map(
                 fn (Transaction $t) => $t->toArray(),
-                $this->transactions->recent(5),
+                $this->transactions->recent($user, 5),
             ),
         ]);
     }

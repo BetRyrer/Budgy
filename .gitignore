@@ -8,11 +8,13 @@ backend/var/
 backend/.env.local
 backend/.env.local.php
 backend/.env.*.local
+backend/config/jwt/
 
 # Frontend (Node)
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/*.tsbuildinfo
 
 # OS / IDE
 .DS_Store

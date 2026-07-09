@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavLink } from './NavLink';
+import { useAuth } from '../AuthContext';
 import { useTheme } from '../ThemeContext';
 
 interface LayoutProps {
@@ -10,6 +11,12 @@ interface LayoutProps {
 
 export default function Layout({ page, onNavigate, children }: LayoutProps) {
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
+
+  if (!user) {
+    // Layout n'est monté que lorsque App.tsx a déjà confirmé la présence d'un utilisateur connecté.
+    return null;
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -33,6 +40,9 @@ export default function Layout({ page, onNavigate, children }: LayoutProps) {
                 Catégories
               </NavLink>
             </nav>
+            <span className="hidden sm:inline text-sm text-slate-500 dark:text-slate-400 ml-2">
+              Bonjour {user.firstName} {user.lastName}
+            </span>
             <button
               onClick={toggleTheme}
               aria-label="Changer de thème"
@@ -52,6 +62,18 @@ export default function Layout({ page, onNavigate, children }: LayoutProps) {
                   <path d="M20.742 13.045A8.088 8.088 0 0 1 18.5 13.5c-4.418 0-8-3.582-8-8 0-.79.114-1.553.327-2.273a.75.75 0 0 0-.977-.926A10.5 10.5 0 1 0 21.75 14a.75.75 0 0 0-1.008-.955Z" />
                 </svg>
               )}
+            </button>
+            <button
+              onClick={logout}
+              aria-label="Se déconnecter"
+              title="Se déconnecter"
+              className="h-9 w-9 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 17l5-5-5-5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12H9" />
+              </svg>
             </button>
           </div>
         </div>
