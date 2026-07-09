@@ -174,5 +174,5 @@ Toutes les routes sont préfixées par `/api` et échangent du JSON.
 ---
 
 <div align="center">
-Fait avec ☕ et Symfony + React
+Fait avec Symfony + React
 </div>
