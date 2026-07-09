@@ -1,0 +1,20 @@
+# Configuration CORS : autorise le frontend (servi sur un autre port/origine)
+# à appeler l'API du backend depuis le navigateur.
+nelmio_cors:
+    defaults:
+        # Regex validant les origines autorisées (ex: http://localhost:5173 en dev).
+        # Fournie via la variable d'env CORS_ALLOW_ORIGIN pour rester configurable
+        # sans toucher au code entre les environnements.
+        origin_regex: true
+        allow_origin: ['%env(CORS_ALLOW_ORIGIN)%']
+        allow_methods: ['GET', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']
+        allow_headers: ['Content-Type', 'Authorization']
+        expose_headers: ['Link']
+        max_age: 3600
+    paths:
+        # N'applique la politique CORS qu'aux routes de l'API
+        '^/api/':
+            allow_origin: ['%env(CORS_ALLOW_ORIGIN)%']
+            allow_methods: ['GET', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']
+            allow_headers: ['Content-Type', 'Authorization']
+            max_age: 3600
