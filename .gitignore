@@ -1,5 +1,5 @@
 # Env
-.env
+/.env
 !.env.example
 
 # Backend (Symfony)
@@ -9,6 +9,7 @@ backend/.env.local
 backend/.env.local.php
 backend/.env.*.local
 backend/config/jwt/
+backend/config/reference.php
 
 # Frontend (Node)
 frontend/node_modules/

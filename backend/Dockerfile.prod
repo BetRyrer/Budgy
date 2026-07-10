@@ -1,0 +1,52 @@
+# ---- Stage 1 : dépendances Composer (sans dev, sans scripts) ----
+# --no-scripts évite d'exécuter cache:clear / assets:install pendant le build,
+# alors que le .env réel (DATABASE_URL, APP_SECRET...) n'est injecté qu'au
+# démarrage du conteneur par la plateforme d'hébergement.
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock symfony.lock ./
+RUN composer install --no-dev --prefer-dist --no-progress --no-interaction --no-scripts --optimize-autoloader
+
+# ---- Stage 2 : image d'exécution (php-fpm + nginx dans un seul conteneur) ----
+# Les plateformes gratuites type Render ne fournissent qu'un seul port par
+# service : nginx et php-fpm doivent donc cohabiter dans le même conteneur
+# (contrairement au dev où ce sont deux services docker-compose séparés).
+FROM php:8.3-fpm-alpine
+
+RUN apk add --no-cache \
+        bash \
+        gettext \
+        nginx \
+        icu-dev \
+        libpq-dev \
+        libzip-dev \
+    && docker-php-ext-configure intl \
+    && docker-php-ext-install -j$(nproc) \
+        pdo_pgsql \
+        pgsql \
+        intl \
+        zip \
+        opcache
+
+RUN { \
+        echo 'opcache.memory_consumption=256'; \
+        echo 'opcache.validate_timestamps=0'; \
+        echo 'opcache.max_accelerated_files=20000'; \
+    } > /usr/local/etc/php/conf.d/opcache-custom.ini
+
+WORKDIR /var/www/html
+
+COPY --from=vendor /app/vendor ./vendor
+COPY . .
+
+RUN mkdir -p var/cache var/log config/jwt \
+    && chown -R www-data:www-data var config/jwt
+
+COPY docker/nginx/prod.conf.template /etc/nginx/http.d/prod.conf.template
+COPY docker/entrypoint.prod.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENV APP_ENV=prod
+EXPOSE 10000
+
+ENTRYPOINT ["entrypoint.sh"]
